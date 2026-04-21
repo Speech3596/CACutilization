@@ -16,38 +16,77 @@ interface Campus  { id: number; name: string; type: 'direct'|'franchise'; displa
 
 interface Props { profiles: Profile[]; campuses: Campus[]; }
 
-const ROLE_LABEL: Record<string, string> = { admin: '관리자', hq_viewer: '본사 뷰어', campus_manager: '캠퍼스 매니저' };
+type SlotKey = 'admin' | 'hq_viewer' | `campus_manager:${number}`;
+
+function encodeSlot(role: string, campus_id: number | null): SlotKey | '' {
+  if (role === 'admin') return 'admin';
+  if (role === 'hq_viewer') return 'hq_viewer';
+  if (role === 'campus_manager' && campus_id != null) return `campus_manager:${campus_id}`;
+  return '';
+}
+
+function decodeSlot(key: string): { role: string; campus_id: number | null } {
+  if (key === 'admin') return { role: 'admin', campus_id: null };
+  if (key === 'hq_viewer') return { role: 'hq_viewer', campus_id: null };
+  if (key.startsWith('campus_manager:')) {
+    return { role: 'campus_manager', campus_id: Number(key.split(':')[1]) };
+  }
+  return { role: '', campus_id: null };
+}
+
+function slotLabel(key: string, campuses: Campus[]): string {
+  if (key === 'admin') return '관리자';
+  if (key === 'hq_viewer') return '본사 뷰어 (HQ Viewer)';
+  if (key.startsWith('campus_manager:')) {
+    const id = Number(key.split(':')[1]);
+    const c = campuses.find((x) => x.id === id);
+    return `Campus Director(${c?.name ?? '?'})`;
+  }
+  return '—';
+}
 
 export function UsersClient({ profiles, campuses }: Props) {
   const router = useRouter();
   const { toast } = useToast();
-  const [form, setForm] = useState({ email: '', full_name: '', role: 'campus_manager', campus_id: '' });
+  const [form, setForm] = useState<{ email: string; full_name: string; slot: string }>({ email: '', full_name: '', slot: '' });
   const [busy, setBusy] = useState(false);
 
-  const campusName = (id: number | null) => campuses.find((c) => c.id === id)?.name ?? '—';
+  const slotOptions: { key: SlotKey; label: string; group: string }[] = [
+    { key: 'admin',     label: '관리자',               group: '본사' },
+    { key: 'hq_viewer', label: '본사 뷰어 (HQ Viewer)', group: '본사' },
+    ...campuses
+      .filter((c) => c.type === 'direct')
+      .map((c) => ({ key: `campus_manager:${c.id}` as SlotKey, label: `Campus Director(${c.name})`, group: '직영' })),
+    ...campuses
+      .filter((c) => c.type === 'franchise')
+      .map((c) => ({ key: `campus_manager:${c.id}` as SlotKey, label: `Campus Director(${c.name})`, group: '가맹' }))
+  ];
 
   async function invite(e: React.FormEvent) {
     e.preventDefault();
+    if (!form.slot) { toast({ title: '역할을 선택하세요', variant: 'destructive' }); return; }
     setBusy(true);
     try {
+      const { role, campus_id } = decodeSlot(form.slot);
       const body = {
         email: form.email.trim(),
         full_name: form.full_name.trim() || null,
-        role: form.role,
-        campus_id: form.role === 'campus_manager' ? Number(form.campus_id) || null : null
+        role,
+        campus_id
       };
       const r = await fetch('/api/users/invite', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.message || '초대 실패');
       toast({ title: '초대 메일 발송', description: form.email });
-      setForm({ email: '', full_name: '', role: 'campus_manager', campus_id: '' });
+      setForm({ email: '', full_name: '', slot: '' });
       router.refresh();
     } catch (err: any) {
       toast({ title: '초대 실패', description: err.message, variant: 'destructive' });
     } finally { setBusy(false); }
   }
 
-  async function updateRole(p: Profile, role: string, campus_id: number | null) {
+  async function updateSlot(p: Profile, slotKey: string) {
+    const { role, campus_id } = decodeSlot(slotKey);
     const r = await fetch(`/api/users/${p.id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
@@ -88,20 +127,26 @@ export function UsersClient({ profiles, campuses }: Props) {
     toast({ title: '재초대 메일 발송' });
   }
 
+  const grouped = {
+    '본사': slotOptions.filter((o) => o.group === '본사'),
+    '직영': slotOptions.filter((o) => o.group === '직영'),
+    '가맹': slotOptions.filter((o) => o.group === '가맹')
+  };
+
   return (
     <div className="grid gap-6">
       <div>
         <h1 className="text-2xl font-bold">계정 관리</h1>
-        <p className="text-sm text-muted-foreground">이메일 초대 → 사용자가 비밀번호 설정 → 역할 부여.</p>
+        <p className="text-sm text-muted-foreground">이메일 초대 → 사용자가 비밀번호 설정 → 역할 부여. HQ Viewer는 여러 명 초대 가능합니다.</p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>계정 초대</CardTitle>
-          <CardDescription>Supabase Auth Invite 메일을 발송합니다.</CardDescription>
+          <CardDescription>역할과 캠퍼스를 함께 선택한 뒤 Supabase Auth Invite 메일을 발송합니다.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={invite} className="grid gap-3 md:grid-cols-5 md:items-end">
+          <form onSubmit={invite} className="grid gap-3 md:grid-cols-4 md:items-end">
             <div className="grid gap-1.5 md:col-span-2">
               <Label>이메일</Label>
               <Input type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
@@ -111,29 +156,20 @@ export function UsersClient({ profiles, campuses }: Props) {
               <Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
             </div>
             <div className="grid gap-1.5">
-              <Label>역할</Label>
-              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Label>역할 · 캠퍼스</Label>
+              <Select value={form.slot} onValueChange={(v) => setForm({ ...form, slot: v })}>
+                <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="admin">관리자</SelectItem>
-                  <SelectItem value="hq_viewer">본사 뷰어</SelectItem>
-                  <SelectItem value="campus_manager">캠퍼스 매니저</SelectItem>
+                  {(Object.keys(grouped) as Array<keyof typeof grouped>).map((g) => (
+                    <div key={g}>
+                      <div className="px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">{g}</div>
+                      {grouped[g].map((o) => <SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>)}
+                    </div>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-1.5">
-              <Label>캠퍼스 {form.role === 'campus_manager' ? '(필수)' : '(선택 불가)'}</Label>
-              <Select
-                value={form.campus_id}
-                onValueChange={(v) => setForm({ ...form, campus_id: v })}
-              >
-                <SelectTrigger disabled={form.role !== 'campus_manager'}><SelectValue placeholder="캠퍼스 선택" /></SelectTrigger>
-                <SelectContent>
-                  {campuses.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name} ({c.type === 'direct' ? '직영' : '가맹'})</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="md:col-span-5 flex justify-end">
+            <div className="md:col-span-4 flex justify-end">
               <Button type="submit" disabled={busy}>{busy ? '…' : '초대 메일 보내기'}</Button>
             </div>
           </form>
@@ -149,41 +185,36 @@ export function UsersClient({ profiles, campuses }: Props) {
           <div className="table-container rounded-md border">
             <table>
               <thead>
-                <tr><th>이메일</th><th>이름</th><th>역할</th><th>캠퍼스</th><th>생성</th><th></th></tr>
+                <tr><th>이메일</th><th>이름</th><th>역할 · 캠퍼스</th><th>생성</th><th></th></tr>
               </thead>
               <tbody>
-                {profiles.map((p) => (
-                  <tr key={p.id}>
-                    <td>{p.email}</td>
-                    <td>{p.full_name ?? '—'}</td>
-                    <td>
-                      <Select value={p.role} onValueChange={(v) => updateRole(p, v, v === 'campus_manager' ? p.campus_id : null)}>
-                        <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="admin">관리자</SelectItem>
-                          <SelectItem value="hq_viewer">본사 뷰어</SelectItem>
-                          <SelectItem value="campus_manager">캠퍼스 매니저</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </td>
-                    <td>
-                      <Select
-                        value={p.campus_id ? String(p.campus_id) : ''}
-                        onValueChange={(v) => updateRole(p, p.role, Number(v))}
-                      >
-                        <SelectTrigger className="h-8 w-36" disabled={p.role !== 'campus_manager'}><SelectValue placeholder={p.role === 'campus_manager' ? campusName(p.campus_id) : '—'} /></SelectTrigger>
-                        <SelectContent>
-                          {campuses.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </td>
-                    <td>{formatKstDateTime(p.created_at)}</td>
-                    <td className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => reinvite(p)}>재초대</Button>
-                      <Button variant="ghost" size="icon" onClick={() => remove(p)}><Trash2 className="h-4 w-4" /></Button>
-                    </td>
-                  </tr>
-                ))}
+                {profiles.map((p) => {
+                  const currentSlot = encodeSlot(p.role, p.campus_id);
+                  return (
+                    <tr key={p.id}>
+                      <td>{p.email}</td>
+                      <td>{p.full_name ?? '—'}</td>
+                      <td>
+                        <Select value={currentSlot} onValueChange={(v) => updateSlot(p, v)}>
+                          <SelectTrigger className="h-8 w-64"><SelectValue placeholder={slotLabel(currentSlot, campuses)} /></SelectTrigger>
+                          <SelectContent>
+                            {(Object.keys(grouped) as Array<keyof typeof grouped>).map((g) => (
+                              <div key={g}>
+                                <div className="px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">{g}</div>
+                                {grouped[g].map((o) => <SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>)}
+                              </div>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </td>
+                      <td>{formatKstDateTime(p.created_at)}</td>
+                      <td className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => reinvite(p)}>재초대</Button>
+                        <Button variant="ghost" size="icon" onClick={() => remove(p)}><Trash2 className="h-4 w-4" /></Button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

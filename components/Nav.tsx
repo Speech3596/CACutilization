@@ -30,7 +30,7 @@ export function Nav({ profile, campusName }: Props) {
   const roleLabel =
     profile.role === 'admin' ? '관리자'
     : profile.role === 'hq_viewer' ? '본사 뷰어'
-    : `캠퍼스 매니저${campusName ? ` · ${campusName}` : ''}`;
+    : `Campus Director${campusName ? `(${campusName})` : ''}`;
 
   async function logout() {
     await supabase.auth.signOut();
