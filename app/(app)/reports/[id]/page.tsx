@@ -51,7 +51,7 @@ export default async function ReportDetail({ params }: { params: { id: string } 
         <Card>
           <CardHeader><CardTitle>안내</CardTitle></CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            해당 기간에 로그가 없습니다. 모든 값은 0 또는 "-"로 표시됩니다.
+            해당 기간에 로그가 없습니다. 모든 값은 0 또는 &quot;-&quot;로 표시됩니다.
           </CardContent>
         </Card>
       )}

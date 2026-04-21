@@ -12,6 +12,8 @@ build/
 .env
 .env.local
 .env.*.local
+*.env
+import.env
 
 # Local secrets / notes (do NOT commit)
 supabase 프로젝트 (데이터베이스 PW).txt
