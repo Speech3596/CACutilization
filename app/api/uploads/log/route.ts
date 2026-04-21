@@ -79,6 +79,13 @@ export async function POST(req: NextRequest) {
   });
 }
 
+// Supabase Storage 는 ASCII 키만 허용 → 한글/공백/특수문자를 '_' 로 치환.
 function safeName(n: string): string {
-  return n.replace(/[^\w.\-가-힣]+/g, '_');
+  const dot = n.lastIndexOf('.');
+  const stem = dot > 0 ? n.slice(0, dot) : n;
+  const extRaw = dot > 0 ? n.slice(dot + 1) : '';
+  const cleanStem = stem.replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '');
+  const cleanExt = extRaw.replace(/[^a-zA-Z0-9]+/g, '').toLowerCase();
+  const base = cleanStem || 'file';
+  return cleanExt ? `${base}.${cleanExt}` : base;
 }
