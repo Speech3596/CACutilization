@@ -20,7 +20,7 @@ export function ReportTabs({ result, campusId }: Props) {
     return (
       <div className="space-y-2">
         <h2 className="text-lg font-semibold">{mine.campus_name}</h2>
-        <ReportTable columns={mine.columns.map((c) => ({ ...c, enrolled: c.enrolled, metrics: c.metrics }))} />
+        <ReportTable rowHeader="담임" columns={mine.columns} />
       </div>
     );
   }
@@ -43,18 +43,18 @@ export function ReportTabs({ result, campusId }: Props) {
       </TabsList>
 
       <TabsContent value="overall">
-        <ReportTable columns={result.overall.columns.map((c) => ({ key: c.key, label: c.label, metrics: c.metrics }))} />
+        <ReportTable rowHeader="캠퍼스" columns={result.overall.columns.map((c) => ({ key: c.key, label: c.label, metrics: c.metrics }))} />
       </TabsContent>
       <TabsContent value="direct">
-        <ReportTable columns={result.direct.columns.map((c) => ({ key: c.key, label: c.label, metrics: c.metrics }))} />
+        <ReportTable rowHeader="캠퍼스" columns={result.direct.columns.map((c) => ({ key: c.key, label: c.label, metrics: c.metrics }))} />
       </TabsContent>
       <TabsContent value="franchise">
-        <ReportTable columns={result.franchise.columns.map((c) => ({ key: c.key, label: c.label, metrics: c.metrics }))} />
+        <ReportTable rowHeader="캠퍼스" columns={result.franchise.columns.map((c) => ({ key: c.key, label: c.label, metrics: c.metrics }))} />
       </TabsContent>
 
       {result.campuses.map((s) => (
         <TabsContent key={s.campus_id!} value={`c-${s.campus_id}`}>
-          <ReportTable columns={s.columns.map((c) => ({ key: c.key, label: c.label, enrolled: c.enrolled, metrics: c.metrics }))} />
+          <ReportTable rowHeader="담임" columns={s.columns} />
         </TabsContent>
       ))}
     </Tabs>

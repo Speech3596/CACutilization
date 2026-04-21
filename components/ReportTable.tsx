@@ -6,48 +6,56 @@ import { fmtNumber, fmtRate } from '@/lib/utils';
 interface Col {
   key:   string;
   label: string;
-  enrolled?: number; // only on campus sheets
+  enrolled?: number; // only on campus sheets (담당 등록 학생 수)
   metrics: MetricValues | Record<string, number>;
 }
 
 interface Props {
+  /** 행으로 쌓을 엔티티(캠퍼스 또는 담임) 목록. prop 명은 하위 호환을 위해 유지. */
   columns: Col[];
-  stickyFirstColumn?: boolean;
+  /** 좌측 머리 열의 라벨. 기본 '구분'. */
+  rowHeader?: string;
 }
 
 const RATE_KEYS = new Set(['usage_rate', 'unique_student_rate', 'homeroom_unique_rate']);
 
-export function ReportTable({ columns }: Props) {
+export function ReportTable({ columns, rowHeader = '구분' }: Props) {
   return (
     <div className="table-container max-h-[70vh] rounded-md border">
       <table>
         <thead>
           <tr>
-            <th className="sticky-col" style={{ minWidth: 140 }}>지표</th>
-            {columns.map((c) => (
-              <th key={c.key} className="text-right" style={{ minWidth: 120 }}>
-                <div>{c.label}</div>
-                <div className="text-[10px] font-normal text-muted-foreground">
-                  등록 {fmtNumber((c.metrics as MetricValues).enrolled_count ?? c.enrolled ?? 0)}명
-                </div>
+            <th className="sticky-col text-left" style={{ minWidth: 180 }}>{rowHeader}</th>
+            {METRIC_KEYS.map((k) => (
+              <th key={k} className="text-right" style={{ minWidth: 110 }}>
+                {METRIC_LABELS[k]}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {METRIC_KEYS.map((k) => (
-            <tr key={k}>
-              <th className="sticky-col text-left">{METRIC_LABELS[k]}</th>
-              {columns.map((c) => {
-                const v = (c.metrics as any)[k] ?? 0;
-                return (
-                  <td key={c.key} className="text-right tabular-nums">
-                    {RATE_KEYS.has(k) ? fmtRate(v) : fmtNumber(v)}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
+          {columns.map((c) => {
+            const m = c.metrics as MetricValues;
+            const enrolled = m.enrolled_count ?? c.enrolled ?? 0;
+            return (
+              <tr key={c.key}>
+                <th className="sticky-col text-left">
+                  <div>{c.label}</div>
+                  <div className="text-[10px] font-normal text-muted-foreground">
+                    등록 {fmtNumber(enrolled)}명
+                  </div>
+                </th>
+                {METRIC_KEYS.map((k) => {
+                  const v = (c.metrics as any)[k] ?? 0;
+                  return (
+                    <td key={k} className="text-right tabular-nums">
+                      {RATE_KEYS.has(k) ? fmtRate(v) : fmtNumber(v)}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
