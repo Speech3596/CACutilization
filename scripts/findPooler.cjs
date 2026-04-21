@@ -1,5 +1,13 @@
 /* eslint-disable */
+// Usage: SUPABASE_PROJECT_REF=xxxx SUPABASE_DB_PASSWORD=yyyy node scripts/findPooler.cjs
 const { Client } = require('pg');
+
+const ref = process.env.SUPABASE_PROJECT_REF;
+const password = process.env.SUPABASE_DB_PASSWORD;
+if (!ref || !password) {
+  console.error('Missing SUPABASE_PROJECT_REF or SUPABASE_DB_PASSWORD');
+  process.exit(1);
+}
 
 const REGIONS = [
   'ap-northeast-1', 'ap-northeast-2', 'ap-southeast-1', 'ap-southeast-2',
@@ -10,8 +18,8 @@ const REGIONS = [
 
 async function tryHost(host) {
   const c = new Client({
-    host, port: 5432, user: 'postgres.kljsprazapjregdpqveb',
-    password: 'Io713811znehWID7', database: 'postgres',
+    host, port: 5432, user: `postgres.${ref}`,
+    password, database: 'postgres',
     ssl: { rejectUnauthorized: false },
     connectionTimeoutMillis: 5000
   });
