@@ -45,10 +45,13 @@ function slotLabel(key: string, campuses: Campus[]): string {
   return '—';
 }
 
+type InviteMode = 'direct' | 'invite';
+
 export function UsersClient({ profiles, campuses }: Props) {
   const router = useRouter();
   const { toast } = useToast();
-  const [form, setForm] = useState<{ email: string; full_name: string; slot: string }>({ email: '', full_name: '', slot: '' });
+  const [form, setForm] = useState<{ email: string; full_name: string; slot: string; password: string }>({ email: '', full_name: '', slot: '', password: '' });
+  const [mode, setMode] = useState<InviteMode>('direct');
   const [busy, setBusy] = useState(false);
 
   const slotOptions: { key: SlotKey; label: string; group: string }[] = [
@@ -65,23 +68,35 @@ export function UsersClient({ profiles, campuses }: Props) {
   async function invite(e: React.FormEvent) {
     e.preventDefault();
     if (!form.slot) { toast({ title: '역할을 선택하세요', variant: 'destructive' }); return; }
+    if (mode === 'direct' && form.password.length < 8) {
+      toast({ title: '초기 비밀번호는 8자 이상이어야 합니다', variant: 'destructive' });
+      return;
+    }
     setBusy(true);
     try {
       const { role, campus_id } = decodeSlot(form.slot);
-      const body = {
+      const body: any = {
         email: form.email.trim(),
         full_name: form.full_name.trim() || null,
         role,
-        campus_id
+        campus_id,
+        mode
       };
+      if (mode === 'direct') body.password = form.password;
+
       const r = await fetch('/api/users/invite', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
       const j = await r.json();
-      if (!r.ok) throw new Error(j.message || '초대 실패');
-      toast({ title: '초대 메일 발송', description: form.email });
-      setForm({ email: '', full_name: '', slot: '' });
+      if (!r.ok) throw new Error(j.message || '생성 실패');
+      toast({
+        title: mode === 'direct' ? '계정이 생성되었습니다' : '초대 메일 발송',
+        description: mode === 'direct'
+          ? `${form.email} · 초기 비밀번호는 사용자에게 안전하게 공유하세요.`
+          : form.email
+      });
+      setForm({ email: '', full_name: '', slot: '', password: '' });
       router.refresh();
     } catch (err: any) {
-      toast({ title: '초대 실패', description: err.message, variant: 'destructive' });
+      toast({ title: mode === 'direct' ? '계정 생성 실패' : '초대 실패', description: err.message, variant: 'destructive' });
     } finally { setBusy(false); }
   }
 
@@ -117,7 +132,7 @@ export function UsersClient({ profiles, campuses }: Props) {
     const r = await fetch('/api/users/invite', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email: p.email, full_name: p.full_name, role: p.role, campus_id: p.campus_id, reinvite: true })
+      body: JSON.stringify({ email: p.email, full_name: p.full_name, role: p.role, campus_id: p.campus_id, reinvite: true, mode: 'invite' })
     });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
@@ -125,6 +140,23 @@ export function UsersClient({ profiles, campuses }: Props) {
       return;
     }
     toast({ title: '재초대 메일 발송' });
+  }
+
+  async function resetPassword(p: Profile) {
+    const pw = prompt(`${p.email} 계정의 새 비밀번호를 입력하세요 (8자 이상):`);
+    if (!pw) return;
+    if (pw.length < 8) { toast({ title: '비밀번호는 8자 이상이어야 합니다', variant: 'destructive' }); return; }
+    const r = await fetch('/api/users/invite', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: p.email, full_name: p.full_name, role: p.role, campus_id: p.campus_id, mode: 'direct', password: pw })
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      toast({ title: '비밀번호 재설정 실패', description: j.message ?? '', variant: 'destructive' });
+      return;
+    }
+    toast({ title: '비밀번호가 재설정되었습니다', description: '사용자에게 새 비밀번호를 안전하게 공유하세요.' });
   }
 
   const grouped = {
@@ -137,15 +169,32 @@ export function UsersClient({ profiles, campuses }: Props) {
     <div className="grid gap-6">
       <div>
         <h1 className="text-2xl font-bold">계정 관리</h1>
-        <p className="text-sm text-muted-foreground">이메일 초대 → 사용자가 비밀번호 설정 → 역할 부여. HQ Viewer는 여러 명 초대 가능합니다.</p>
+        <p className="text-sm text-muted-foreground">직접 생성: 관리자가 초기 비밀번호 지정 후 사용자에게 공유. · 메일 초대: Supabase가 링크 발송(하루 발송량 제한 있음).</p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>계정 초대</CardTitle>
-          <CardDescription>역할과 캠퍼스를 함께 선택한 뒤 Supabase Auth Invite 메일을 발송합니다.</CardDescription>
+          <CardTitle>계정 생성 / 초대</CardTitle>
+          <CardDescription>역할 · 캠퍼스를 선택하고, 비밀번호를 즉시 지정하거나 초대 메일을 발송합니다.</CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-4 inline-flex rounded-md border p-0.5 text-sm">
+            <button
+              type="button"
+              onClick={() => setMode('direct')}
+              className={`px-3 py-1 rounded ${mode === 'direct' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+            >
+              직접 생성
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('invite')}
+              className={`px-3 py-1 rounded ${mode === 'invite' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+            >
+              메일 초대
+            </button>
+          </div>
+
           <form onSubmit={invite} className="grid gap-3 md:grid-cols-4 md:items-end">
             <div className="grid gap-1.5 md:col-span-2">
               <Label>이메일</Label>
@@ -169,8 +218,25 @@ export function UsersClient({ profiles, campuses }: Props) {
                 </SelectContent>
               </Select>
             </div>
+            {mode === 'direct' && (
+              <div className="grid gap-1.5 md:col-span-2">
+                <Label>초기 비밀번호 (8자 이상)</Label>
+                <Input
+                  type="text"
+                  autoComplete="new-password"
+                  required
+                  minLength={8}
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  placeholder="예: canb20260421"
+                />
+                <span className="text-[11px] text-muted-foreground">메일 없이 계정이 즉시 생성됩니다. 비밀번호는 사용자에게 안전하게 공유하세요.</span>
+              </div>
+            )}
             <div className="md:col-span-4 flex justify-end">
-              <Button type="submit" disabled={busy}>{busy ? '…' : '초대 메일 보내기'}</Button>
+              <Button type="submit" disabled={busy}>
+                {busy ? '…' : mode === 'direct' ? '계정 생성' : '초대 메일 보내기'}
+              </Button>
             </div>
           </form>
         </CardContent>
@@ -209,6 +275,7 @@ export function UsersClient({ profiles, campuses }: Props) {
                       </td>
                       <td>{formatKstDateTime(p.created_at)}</td>
                       <td className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => resetPassword(p)}>비번 재설정</Button>
                         <Button variant="outline" size="sm" onClick={() => reinvite(p)}>재초대</Button>
                         <Button variant="ghost" size="icon" onClick={() => remove(p)}><Trash2 className="h-4 w-4" /></Button>
                       </td>

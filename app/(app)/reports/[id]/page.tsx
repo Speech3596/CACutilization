@@ -20,13 +20,21 @@ export default async function ReportDetail({ params }: { params: { id: string } 
     .single();
   if (!r) notFound();
 
-  const [{ data: snap }, { data: lu }] = await Promise.all([
-    supabase.from('student_snapshots').select('base_date').eq('id', r.student_snapshot_id).single(),
-    supabase.from('log_uploads').select('filename').eq('id', r.log_upload_id).single()
+  const [snapRes, luRes] = await Promise.all([
+    r.student_snapshot_id
+      ? supabase.from('student_snapshots').select('base_date').eq('id', r.student_snapshot_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    r.log_upload_id
+      ? supabase.from('log_uploads').select('filename').eq('id', r.log_upload_id).maybeSingle()
+      : Promise.resolve({ data: null })
   ]);
+  const snap = snapRes.data as { base_date: string } | null;
+  const lu   = luRes.data   as { filename:  string } | null;
 
   const result = r.data as unknown as ReportResult;
   const banner = r.exclude_upper_levels ? 'Deca~ / 중등 제외: 적용' : '전체 학생 포함';
+  const snapLabel = snap?.base_date ?? '(삭제된 스냅샷)';
+  const luLabel   = lu?.filename    ?? '(삭제된 로그)';
 
   return (
     <div className="grid gap-4">
@@ -34,7 +42,7 @@ export default async function ReportDetail({ params }: { params: { id: string } 
         <div>
           <h1 className="text-2xl font-bold">리포트 상세</h1>
           <div className="text-sm text-muted-foreground">
-            기준일 {snap?.base_date} · 로그 {lu?.filename} · 기간 {formatKstDate(r.period_start)}~{formatKstDate(r.period_end)} · 생성 {formatKstDateTime(r.created_at)}
+            기준일 {snapLabel} · 로그 {luLabel} · 기간 {formatKstDate(r.period_start)}~{formatKstDate(r.period_end)} · 생성 {formatKstDateTime(r.created_at)}
           </div>
         </div>
         <div className="flex gap-2">
