@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 330 15% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 330 15% 12%;
+
+    --primary: 327 83% 40%;            /* CANB 마젠타 #B8116F */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 330 30% 95%;
+    --secondary-foreground: 330 15% 18%;
+
+    --muted: 330 20% 96%;
+    --muted-foreground: 330 10% 40%;
+
+    --accent: 327 83% 95%;
+    --accent-foreground: 327 83% 28%;
+
+    --destructive: 0 84% 52%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 330 20% 88%;
+    --input: 330 20% 88%;
+    --ring: 327 83% 40%;
+
+    --radius: 0.5rem;
+  }
+}
+
+* { border-color: hsl(var(--border)); }
+
+html, body { height: 100%; }
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Gmarket Sans',
+    sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Sticky-friendly tables */
+.table-container { overflow: auto; }
+.table-container table { border-collapse: separate; border-spacing: 0; width: 100%; }
+.table-container th, .table-container td { padding: 0.5rem 0.75rem; border-bottom: 1px solid hsl(var(--border)); white-space: nowrap; }
+.table-container thead th {
+  position: sticky; top: 0; z-index: 3;
+  background: hsl(var(--accent)); color: hsl(var(--accent-foreground)); font-weight: 600;
+}
+.table-container tbody th.sticky-col,
+.table-container tbody td.sticky-col {
+  position: sticky; left: 0; background: hsl(var(--background)); z-index: 2; font-weight: 600;
+  border-right: 1px solid hsl(var(--border));
+}
+.table-container thead th.sticky-col { z-index: 4; }
