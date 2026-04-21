@@ -35,8 +35,14 @@ export interface LogParseResult {
  *   - STUDENT_CODE 엄격 검증
  *   - ACCESS_DATETIME → Date (KST 문자열 가정, Excel serial도 지원)
  */
+// Excel 은 날짜 셀을 "로컬 시계" 기준 serial 로 저장한다 (TZ 정보 없음).
+// CANB 로그 원본은 KST(UTC+9) 기준이므로, serial/문자열 모두 KST 로 해석해야 한다.
+// cellDates:true 는 내부적으로 serial 을 UTC 로 변환해 Date 를 만들어버려 ~9h 밀린다.
+// 따라서 cellDates:false 로 raw 값을 받고 coerceDate 에서 직접 KST 로 해석한다.
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
 export function parseLogWorkbook(buf: ArrayBuffer): LogParseResult {
-  const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+  const wb = XLSX.read(buf, { type: 'array', cellDates: false });
   const errors: LogParseError[] = [];
   if (wb.SheetNames.length === 0) {
     errors.push({ kind: 'missing_sheet', message: '시트를 찾을 수 없습니다.' });
@@ -124,15 +130,26 @@ export function parseLogWorkbook(buf: ArrayBuffer): LogParseResult {
 
 function coerceDate(v: unknown): Date | null {
   if (v == null || v === '') return null;
-  if (v instanceof Date) return v;
+
+  // 숫자 serial: "1899-12-30 기준 일수" (Excel 기준). 이는 KST 로컬 시계이므로
+  //   실제 UTC = KST - 9h = (epoch + v*86400000) - 9h
   if (typeof v === 'number') {
-    // Excel serial date (days since 1899-12-30)
     const epoch = Date.UTC(1899, 11, 30);
-    return new Date(epoch + v * 86400000);
+    return new Date(epoch + v * 86400000 - KST_OFFSET_MS);
   }
+
+  if (v instanceof Date) {
+    // XLSX 가 이미 Date 로 변환한 경우(cellDates:true 경로): UTC 로 간주되어 있음.
+    // KST 해석으로 교정하려면 -9h.
+    return new Date(v.getTime() - KST_OFFSET_MS);
+  }
+
+  // 문자열: TZ 오프셋이 없으면 KST 로 간주.
   const s = String(v).trim();
-  const isoish = s.replace(' ', 'T');
-  const d = new Date(isoish);
+  const hasOffset = /[Zz]|[+-]\d{2}:?\d{2}$/.test(s);
+  const normalized = s.replace(' ', 'T');
+  const withTz = hasOffset ? normalized : `${normalized}+09:00`;
+  const d = new Date(withTz);
   if (isNaN(d.getTime())) return null;
   return d;
 }

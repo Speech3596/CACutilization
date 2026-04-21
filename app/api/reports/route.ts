@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
-import { computeReport, type ReportResult, type StudentRow, type LogRow } from '@/lib/canb/reportCalculator';
+import { computeReport, REPORT_SCHEMA_VERSION, type ReportResult, type StudentRow, type LogRow } from '@/lib/canb/reportCalculator';
 import { z } from 'zod';
 
 export const runtime = 'nodejs';
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
   const svc = createSupabaseServiceClient();
 
-  // 캐시 체크 (동일 입력 조합)
+  // 캐시 체크 (동일 입력 조합). schema_version 이 다르면 구버전 계산식이므로 폐기 후 재계산.
   const { data: cached } = await svc
     .from('reports')
     .select('id, data, xlsx_path')
@@ -39,7 +39,18 @@ export async function POST(req: NextRequest) {
     .eq('period_end',          period_end)
     .eq('exclude_upper_levels', exclude_upper_levels)
     .maybeSingle();
-  if (cached) return NextResponse.json({ id: cached.id, data: cached.data, cached: true });
+  if (cached) {
+    const cachedVersion = (cached.data as any)?.schema_version ?? null;
+    if (cachedVersion === REPORT_SCHEMA_VERSION) {
+      return NextResponse.json({ id: cached.id, data: cached.data, cached: true });
+    }
+    // 구버전 캐시 폐기: xlsx + 다운로드 이력 + 레코드 제거 후 아래에서 새로 생성.
+    if (cached.xlsx_path) {
+      await svc.storage.from('reports').remove([cached.xlsx_path]).catch(() => {});
+    }
+    await svc.from('report_downloads').delete().eq('report_id', cached.id);
+    await svc.from('reports').delete().eq('id', cached.id);
+  }
 
   // 학생 로드
   const students = await loadAllStudents(svc, student_snapshot_id);

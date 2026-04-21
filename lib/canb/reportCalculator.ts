@@ -94,7 +94,12 @@ export interface AggregateSheet {
   }>;
 }
 
+// 계산 로직이 변경되면 이 버전을 올려 이전에 캐시된 reports.data 를 무효화한다.
+// v2: usage_rate 를 총조회수/학생수 로 수정 (이전엔 학생고유조회수/학생수 로 계산되어 학생고유사용률과 동일했음).
+export const REPORT_SCHEMA_VERSION = 'v2';
+
 export interface ReportResult {
+  schema_version:         string;
   input: {
     period_start:         string;
     period_end:           string;
@@ -315,6 +320,7 @@ export function computeReport(input: ReportInput): ReportResult {
   };
 
   return {
+    schema_version: REPORT_SCHEMA_VERSION,
     input: {
       period_start: input.period_start.toISOString(),
       period_end:   input.period_end.toISOString(),
