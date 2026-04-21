@@ -23,8 +23,12 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     .single();
   if (!r) return NextResponse.json({ message: '리포트 없음' }, { status: 404 });
 
-  const { data: snap } = await svc.from('student_snapshots').select('base_date').eq('id', r.student_snapshot_id).single();
-  const { data: lu }   = await svc.from('log_uploads').select('filename').eq('id', r.log_upload_id).single();
+  const { data: snap } = r.student_snapshot_id
+    ? await svc.from('student_snapshots').select('base_date').eq('id', r.student_snapshot_id).maybeSingle()
+    : { data: null };
+  const { data: lu } = r.log_upload_id
+    ? await svc.from('log_uploads').select('filename').eq('id', r.log_upload_id).maybeSingle()
+    : { data: null };
 
   const result = r.data as unknown as ReportResult;
   const buf = await buildReportXlsx(result, {

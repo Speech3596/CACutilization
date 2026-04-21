@@ -6,7 +6,7 @@ import { fmtNumber, fmtRate } from '@/lib/utils';
 interface Col {
   key:   string;
   label: string;
-  enrolled?: number; // only on campus sheets (담당 등록 학생 수)
+  enrolled?: number;
   metrics: MetricValues | Record<string, number>;
 }
 
@@ -25,7 +25,8 @@ export function ReportTable({ columns, rowHeader = '구분' }: Props) {
       <table>
         <thead>
           <tr>
-            <th className="sticky-col text-left" style={{ minWidth: 180 }}>{rowHeader}</th>
+            <th className="sticky-col text-left" style={{ minWidth: 160 }}>{rowHeader}</th>
+            <th className="text-right" style={{ minWidth: 100 }}>전체 학생수</th>
             {METRIC_KEYS.map((k) => (
               <th key={k} className="text-right" style={{ minWidth: 110 }}>
                 {METRIC_LABELS[k]}
@@ -39,12 +40,8 @@ export function ReportTable({ columns, rowHeader = '구분' }: Props) {
             const enrolled = m.enrolled_count ?? c.enrolled ?? 0;
             return (
               <tr key={c.key}>
-                <th className="sticky-col text-left">
-                  <div>{c.label}</div>
-                  <div className="text-[10px] font-normal text-muted-foreground">
-                    등록 {fmtNumber(enrolled)}명
-                  </div>
-                </th>
+                <th className="sticky-col text-left">{c.label}</th>
+                <td className="text-right tabular-nums">{fmtNumber(enrolled)}</td>
                 {METRIC_KEYS.map((k) => {
                   const v = (c.metrics as any)[k] ?? 0;
                   return (

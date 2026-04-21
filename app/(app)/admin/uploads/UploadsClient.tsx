@@ -61,14 +61,29 @@ function StudentSection({ snapshots, onChange, toast }: { snapshots: Snapshot[];
   }
 
   async function remove(id: string) {
-    if (!confirm('이 학생 스냅샷을 삭제하시겠습니까?')) return;
+    // 종속 리포트 수 확인
+    let dep = 0;
+    try {
+      const info = await fetch(`/api/uploads/student/${id}`, { method: 'GET' }).then((r) => r.json());
+      dep = Number(info?.dependent_reports ?? 0);
+    } catch { /* ignore */ }
+
+    const msg = dep > 0
+      ? `이 학생 스냅샷을 삭제하면 연결된 리포트 ${dep}건도 함께 삭제됩니다.\n계속하시겠습니까?`
+      : '이 학생 스냅샷을 삭제하시겠습니까?';
+    if (!confirm(msg)) return;
+
     const r = await fetch(`/api/uploads/student/${id}`, { method: 'DELETE' });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
       toast({ title: '삭제 실패', description: j.message ?? '', variant: 'destructive' });
       return;
     }
-    toast({ title: '삭제되었습니다' });
+    const j = await r.json().catch(() => ({}));
+    toast({
+      title: '삭제되었습니다',
+      description: j.deleted_reports ? `관련 리포트 ${j.deleted_reports}건도 함께 삭제됨` : undefined
+    });
     onChange();
   }
 
@@ -148,14 +163,28 @@ function LogSection({ logs, onChange, toast }: { logs: LogUp[]; onChange: () => 
   }
 
   async function remove(id: string) {
-    if (!confirm('이 로그 업로드를 삭제하시겠습니까?')) return;
+    let dep = 0;
+    try {
+      const info = await fetch(`/api/uploads/log/${id}`, { method: 'GET' }).then((r) => r.json());
+      dep = Number(info?.dependent_reports ?? 0);
+    } catch { /* ignore */ }
+
+    const msg = dep > 0
+      ? `이 로그 업로드를 삭제하면 연결된 리포트 ${dep}건도 함께 삭제됩니다.\n계속하시겠습니까?`
+      : '이 로그 업로드를 삭제하시겠습니까?';
+    if (!confirm(msg)) return;
+
     const r = await fetch(`/api/uploads/log/${id}`, { method: 'DELETE' });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
       toast({ title: '삭제 실패', description: j.message ?? '', variant: 'destructive' });
       return;
     }
-    toast({ title: '삭제되었습니다' });
+    const j = await r.json().catch(() => ({}));
+    toast({
+      title: '삭제되었습니다',
+      description: j.deleted_reports ? `관련 리포트 ${j.deleted_reports}건도 함께 삭제됨` : undefined
+    });
     onChange();
   }
 

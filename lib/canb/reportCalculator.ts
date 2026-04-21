@@ -158,10 +158,15 @@ function computeMetrics(
   const unique_student_views  = studentsWithAnyLog.size;
   const homeroom_unique_views = studentsWithHomeroomLog.size;
 
+  // 사용률 정의 (§5-3):
+  //   usage_rate            = 총조회수 / 전체학생수        → 100% 초과 가능 (학생당 여러 건 접속)
+  //   unique_student_rate   = 학생고유조회수 / 전체학생수  → 최대 100%
+  //   homeroom_unique_rate  = 담임고유조회수 / 전체학생수  → 최대 100%,
+  //                           homeroom_unique ⊆ unique_student 이므로 학생고유사용률 이하.
   return {
     enrolled_count,
     total_views,
-    usage_rate:            pct(unique_student_views,  enrolled_count),
+    usage_rate:            pct(total_views,           enrolled_count),
     unique_student_views,
     unique_student_rate:   pct(unique_student_views,  enrolled_count),
     homeroom_unique_views,
