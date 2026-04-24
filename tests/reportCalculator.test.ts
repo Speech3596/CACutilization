@@ -62,7 +62,8 @@ describe('computeReport (§5)', () => {
       logs:     mkLogs(),
       period_start: d('2026-03-01T00:00:00'),
       period_end:   d('2026-03-31T23:59:59'),
-      exclude_upper_levels: false
+      exclude_upper_levels:  false,
+      exclude_middle_levels: false
     });
     expect(r.counts.enrolled_total).toBe(5);
     expect(r.counts.enrolled_direct).toBe(3);
@@ -78,13 +79,14 @@ describe('computeReport (§5)', () => {
     expect(overall.metrics.homeroom_unique_rate).toBeCloseTo(80.0, 1);
   });
 
-  it('exclude ON → CB5(W4 중등) 제외', () => {
+  it('중등 제외 ON → CB5(W4 중등) 제외', () => {
     const r = computeReport({
       students: mkStudents(),
       logs:     mkLogs(),
       period_start: d('2026-03-01T00:00:00'),
       period_end:   d('2026-03-31T23:59:59'),
-      exclude_upper_levels: true
+      exclude_upper_levels:  false,
+      exclude_middle_levels: true
     });
     expect(r.counts.enrolled_total).toBe(4);
     expect(r.counts.enrolled_franchise).toBe(1);
@@ -103,7 +105,8 @@ describe('computeReport (§5)', () => {
       logs:     mkLogs(),
       period_start: d('2026-03-01T00:00:00'),
       period_end:   d('2026-03-31T23:59:59'),
-      exclude_upper_levels: false
+      exclude_upper_levels:  false,
+      exclude_middle_levels: false
     });
     const suji = r.campuses.find((c) => c.campus_id === 1)!;
     // 첫 컬럼 = 캠퍼스 합계

@@ -8,11 +8,12 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 const schema = z.object({
-  student_snapshot_id:  z.string().uuid(),
-  log_upload_id:        z.string().uuid(),
-  period_start:         z.string(),    // ISO
-  period_end:           z.string(),    // ISO
-  exclude_upper_levels: z.boolean()
+  student_snapshot_id:   z.string().uuid(),
+  log_upload_id:         z.string().uuid(),
+  period_start:          z.string(),    // ISO
+  period_end:            z.string(),    // ISO
+  exclude_upper_levels:  z.boolean(),
+  exclude_middle_levels: z.boolean()
 });
 
 export async function POST(req: NextRequest) {
@@ -25,7 +26,14 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ message: '잘못된 입력', issues: parsed.error.flatten() }, { status: 400 });
-  const { student_snapshot_id, log_upload_id, period_start, period_end, exclude_upper_levels } = parsed.data;
+  const {
+    student_snapshot_id,
+    log_upload_id,
+    period_start,
+    period_end,
+    exclude_upper_levels,
+    exclude_middle_levels
+  } = parsed.data;
 
   const svc = createSupabaseServiceClient();
 
@@ -33,18 +41,19 @@ export async function POST(req: NextRequest) {
   const { data: cached } = await svc
     .from('reports')
     .select('id, data, xlsx_path')
-    .eq('student_snapshot_id', student_snapshot_id)
-    .eq('log_upload_id',       log_upload_id)
-    .eq('period_start',        period_start)
-    .eq('period_end',          period_end)
-    .eq('exclude_upper_levels', exclude_upper_levels)
+    .eq('student_snapshot_id',   student_snapshot_id)
+    .eq('log_upload_id',         log_upload_id)
+    .eq('period_start',          period_start)
+    .eq('period_end',            period_end)
+    .eq('exclude_upper_levels',  exclude_upper_levels)
+    .eq('exclude_middle_levels', exclude_middle_levels)
     .maybeSingle();
   if (cached) {
     const cachedVersion = (cached.data as any)?.schema_version ?? null;
     if (cachedVersion === REPORT_SCHEMA_VERSION) {
       return NextResponse.json({ id: cached.id, data: cached.data, cached: true });
     }
-    // 구버전 캐시 폐기: xlsx + 다운로드 이력 + 레코드 제거 후 아래에서 새로 생성.
+    // 구버전 캐시 폐기
     if (cached.xlsx_path) {
       await svc.storage.from('reports').remove([cached.xlsx_path]).catch(() => {});
     }
@@ -60,9 +69,10 @@ export async function POST(req: NextRequest) {
   const result = computeReport({
     students,
     logs,
-    period_start: new Date(period_start),
-    period_end:   new Date(period_end),
-    exclude_upper_levels
+    period_start:          new Date(period_start),
+    period_end:            new Date(period_end),
+    exclude_upper_levels,
+    exclude_middle_levels
   });
 
   // 저장
@@ -74,6 +84,7 @@ export async function POST(req: NextRequest) {
       period_start,
       period_end,
       exclude_upper_levels,
+      exclude_middle_levels,
       created_by: user.id,
       data: result as unknown
     })

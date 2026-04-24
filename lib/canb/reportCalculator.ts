@@ -7,7 +7,7 @@
 //  - 학생의 담임 기준 그룹핑 (§5-2(6))
 
 import { CAMPUSES, CAMPUS_BY_ID, CampusMaster, DIRECT_CAMPUSES, FRANCHISE_CAMPUSES, mapCampusRaw } from './campusMapping';
-import { isUpperOrMiddle } from './levelFilter';
+import { isUpperElementary, isMiddleOrHigh } from './levelFilter';
 
 // =====================================================================
 // Input types
@@ -31,11 +31,12 @@ export interface LogRow {
 }
 
 export interface ReportInput {
-  students:             StudentRow[];
-  logs:                 LogRow[];
-  period_start:         Date;
-  period_end:           Date;
-  exclude_upper_levels: boolean;
+  students:              StudentRow[];
+  logs:                  LogRow[];
+  period_start:          Date;
+  period_end:            Date;
+  exclude_upper_levels:  boolean;  // Deca·Hendeca 제외
+  exclude_middle_levels: boolean;  // 중등(X/W/Y/Z, 통합 L, 고등 포함) 제외
 }
 
 // =====================================================================
@@ -95,15 +96,17 @@ export interface AggregateSheet {
 }
 
 // 계산 로직이 변경되면 이 버전을 올려 이전에 캐시된 reports.data 를 무효화한다.
-// v2: usage_rate 를 총조회수/학생수 로 수정 (이전엔 학생고유조회수/학생수 로 계산되어 학생고유사용률과 동일했음).
-export const REPORT_SCHEMA_VERSION = 'v2';
+// v2: usage_rate 를 총조회수/학생수 로 수정.
+// v3: "Deca~/중등 제외" 를 두 개 독립 토글로 분리 (exclude_upper_levels, exclude_middle_levels).
+export const REPORT_SCHEMA_VERSION = 'v3';
 
 export interface ReportResult {
-  schema_version:         string;
+  schema_version:          string;
   input: {
-    period_start:         string;
-    period_end:           string;
-    exclude_upper_levels: boolean;
+    period_start:          string;
+    period_end:            string;
+    exclude_upper_levels:  boolean;
+    exclude_middle_levels: boolean;
   };
   counts: {
     enrolled_total:           number; // exclude 필터 후 등록 학생 수
@@ -189,9 +192,12 @@ export function computeReport(input: ReportInput): ReportResult {
   // 1) 등록 학생 필터
   let enrolled = input.students.filter((s) => (s.status ?? '').trim() === '등록');
 
-  // 2) exclude_upper_levels (§5-2a)
+  // 2) 레벨 제외 옵션 (§5-2a) — 두 토글 독립
   if (input.exclude_upper_levels) {
-    enrolled = enrolled.filter((s) => !isUpperOrMiddle(s.level, s.phase));
+    enrolled = enrolled.filter((s) => !isUpperElementary(s.level));
+  }
+  if (input.exclude_middle_levels) {
+    enrolled = enrolled.filter((s) => !isMiddleOrHigh(s.level, s.phase));
   }
 
   // 3) campus 매핑 (일단 pre-mapped 사용, 없으면 on-the-fly)
@@ -322,9 +328,10 @@ export function computeReport(input: ReportInput): ReportResult {
   return {
     schema_version: REPORT_SCHEMA_VERSION,
     input: {
-      period_start: input.period_start.toISOString(),
-      period_end:   input.period_end.toISOString(),
-      exclude_upper_levels: input.exclude_upper_levels
+      period_start:          input.period_start.toISOString(),
+      period_end:            input.period_end.toISOString(),
+      exclude_upper_levels:  input.exclude_upper_levels,
+      exclude_middle_levels: input.exclude_middle_levels
     },
     counts: {
       enrolled_total:           allCodes.size,

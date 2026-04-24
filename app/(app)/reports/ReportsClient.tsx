@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ReportTabs } from '@/components/ReportTabs';
 import { useToast } from '@/components/ui/toast';
-import { formatKstDate } from '@/lib/utils';
+import { formatKstKoreanShort } from '@/lib/utils';
 import type { ReportResult } from '@/lib/canb/reportCalculator';
 import { Download } from 'lucide-react';
 
@@ -35,6 +35,10 @@ function toIsoStart(dateInput: string): string {
 function toIsoEnd(dateInput: string): string {
   return new Date(`${dateInput}T23:59:59.999+09:00`).toISOString();
 }
+function koreanShortFromDateInput(s: string): string {
+  if (!s) return '';
+  return formatKstKoreanShort(`${s}T00:00:00+09:00`);
+}
 
 export function ReportsClient({ profile, snapshots, logs, campuses }: Props) {
   const { toast } = useToast();
@@ -43,7 +47,8 @@ export function ReportsClient({ profile, snapshots, logs, campuses }: Props) {
   const selectedLog = useMemo(() => logs.find((l) => l.id === logId), [logs, logId]);
   const [startDate, setStartDate] = useState<string>(selectedLog ? toDateInput(selectedLog.period_start_auto) : '');
   const [endDate, setEndDate]     = useState<string>(selectedLog ? toDateInput(selectedLog.period_end_auto) : '');
-  const [excludeUpper, setExcludeUpper] = useState(false);
+  const [excludeUpper, setExcludeUpper]   = useState(false);  // Deca·Hendeca 제외
+  const [excludeMiddle, setExcludeMiddle] = useState(false);  // 중등 제외
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ReportResult | null>(null);
   const [reportId, setReportId] = useState<string | null>(null);
@@ -67,11 +72,12 @@ export function ReportsClient({ profile, snapshots, logs, campuses }: Props) {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          student_snapshot_id: snapshotId,
-          log_upload_id: logId,
-          period_start: toIsoStart(startDate),
-          period_end:   toIsoEnd(endDate),
-          exclude_upper_levels: excludeUpper
+          student_snapshot_id:   snapshotId,
+          log_upload_id:         logId,
+          period_start:          toIsoStart(startDate),
+          period_end:            toIsoEnd(endDate),
+          exclude_upper_levels:  excludeUpper,
+          exclude_middle_levels: excludeMiddle
         })
       });
       const j = await res.json();
@@ -85,7 +91,10 @@ export function ReportsClient({ profile, snapshots, logs, campuses }: Props) {
   }
 
   const campusName = (id: number | null) => campuses.find((c) => c.id === id)?.name ?? '—';
-  const banner = excludeUpper ? 'Deca~ / 중등 제외: 적용' : '전체 학생 포함';
+  const bannerParts: string[] = [];
+  if (excludeUpper)  bannerParts.push('Deca·Hendeca 제외');
+  if (excludeMiddle) bannerParts.push('중등 제외');
+  const banner = bannerParts.length === 0 ? '전체 학생 포함' : bannerParts.join(' · ');
 
   return (
     <div className="grid gap-4">
@@ -111,7 +120,9 @@ export function ReportsClient({ profile, snapshots, logs, campuses }: Props) {
                 <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
                 <SelectContent>
                   {snapshots.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.base_date} · {s.row_count.toLocaleString()}명 · {s.filename}</SelectItem>
+                    <SelectItem key={s.id} value={s.id}>
+                      {formatKstKoreanShort(`${s.base_date}T00:00:00+09:00`)} · {s.row_count.toLocaleString()}명 · {s.filename}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -122,7 +133,9 @@ export function ReportsClient({ profile, snapshots, logs, campuses }: Props) {
                 <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
                 <SelectContent>
                   {logs.map((l) => (
-                    <SelectItem key={l.id} value={l.id}>{formatKstDate(l.period_start_auto)}~{formatKstDate(l.period_end_auto)} · {l.row_count.toLocaleString()}행</SelectItem>
+                    <SelectItem key={l.id} value={l.id}>
+                      {formatKstKoreanShort(l.period_start_auto)} ~ {formatKstKoreanShort(l.period_end_auto)} · {l.row_count.toLocaleString()}행
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -130,26 +143,39 @@ export function ReportsClient({ profile, snapshots, logs, campuses }: Props) {
             <div className="grid gap-1.5">
               <Label>기간 시작</Label>
               <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              {startDate && <p className="text-xs text-muted-foreground">{koreanShortFromDateInput(startDate)}</p>}
             </div>
             <div className="grid gap-1.5">
               <Label>기간 종료</Label>
               <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              {endDate && <p className="text-xs text-muted-foreground">{koreanShortFromDateInput(endDate)}</p>}
             </div>
 
             <div className="md:col-span-6 flex flex-wrap items-center gap-3 justify-between pt-2">
               {profile.role === 'campus_manager' && (
                 <div className="text-sm text-muted-foreground">캠퍼스 필터 고정: <b>{campusName(profile.campus_id)}</b></div>
               )}
-              <div className="ml-auto flex items-center gap-3">
+              <div className="ml-auto flex items-center gap-4 flex-wrap">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <label className="flex items-center gap-2 text-sm cursor-pointer">
                       <Checkbox checked={excludeUpper} onCheckedChange={(v) => setExcludeUpper(!!v)} />
-                      Deca~ / 중등 제외
+                      Deca·Hendeca 제외
                     </label>
                   </TooltipTrigger>
                   <TooltipContent side="top">
-                    체크 시 Deca·Hendeca 그룹과 중등(X/W/Y/Z, L 통합) 학생을 분모와 로그 카운트 양쪽에서 완전 제외합니다.
+                    체크 시 Deca·Hendeca 그룹 학생을 분모와 로그 카운트 양쪽에서 완전 제외합니다. 중등(X/W/Y/Z, 통합 L)은 분모에 포함됩니다.
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox checked={excludeMiddle} onCheckedChange={(v) => setExcludeMiddle(!!v)} />
+                      중등 제외
+                    </label>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    체크 시 중등/고등(X/W/Y/Z, 통합 L, phase 중등·고등) 학생을 분모와 로그 카운트 양쪽에서 완전 제외합니다. Deca·Hendeca 는 분모에 포함됩니다.
                   </TooltipContent>
                 </Tooltip>
                 <Button onClick={runReport} disabled={!canQuery || busy}>{busy ? '생성 중…' : '조회'}</Button>
@@ -166,7 +192,7 @@ export function ReportsClient({ profile, snapshots, logs, campuses }: Props) {
 
       {result && (
         <>
-          <div className={`rounded-md border px-3 py-2 text-sm ${excludeUpper ? 'border-primary bg-accent text-accent-foreground' : 'bg-muted'}`}>
+          <div className={`rounded-md border px-3 py-2 text-sm ${(excludeUpper || excludeMiddle) ? 'border-primary bg-accent text-accent-foreground' : 'bg-muted'}`}>
             <b>{banner}</b> · 등록 학생 {result.counts.enrolled_total.toLocaleString()}명 · 기간 로그 {result.counts.logs_in_period.toLocaleString()}건 (매칭 {result.counts.logs_matched_to_enrolled.toLocaleString()}건)
           </div>
           <ReportTabs result={result} campusId={profile.role === 'campus_manager' ? profile.campus_id : null} />

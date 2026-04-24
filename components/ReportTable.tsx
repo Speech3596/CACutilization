@@ -18,6 +18,17 @@ interface Props {
 }
 
 const RATE_KEYS = new Set(['usage_rate', 'unique_student_rate', 'homeroom_unique_rate']);
+// 단위: 총 조회수 = '건', 학생/담임 고유 조회수 = '명'
+const VIEW_UNIT: Record<string, '건' | '명'> = {
+  total_views:           '건',
+  unique_student_views:  '명',
+  homeroom_unique_views: '명'
+};
+
+function fmtWithUnit(v: number, unit: '건' | '명'): string {
+  if (v === 0) return '-';
+  return `${fmtNumber(v)} ${unit}`;
+}
 
 export function ReportTable({ columns, rowHeader = '구분' }: Props) {
   return (
@@ -26,9 +37,9 @@ export function ReportTable({ columns, rowHeader = '구분' }: Props) {
         <thead>
           <tr>
             <th className="sticky-col text-left" style={{ minWidth: 160 }}>{rowHeader}</th>
-            <th className="text-right" style={{ minWidth: 100 }}>전체 학생수</th>
+            <th className="text-right" style={{ minWidth: 110 }}>전체 학생수</th>
             {METRIC_KEYS.map((k) => (
-              <th key={k} className="text-right" style={{ minWidth: 110 }}>
+              <th key={k} className="text-right" style={{ minWidth: 120 }}>
                 {METRIC_LABELS[k]}
               </th>
             ))}
@@ -41,12 +52,12 @@ export function ReportTable({ columns, rowHeader = '구분' }: Props) {
             return (
               <tr key={c.key}>
                 <th className="sticky-col text-left">{c.label}</th>
-                <td className="text-right tabular-nums">{fmtNumber(enrolled)}</td>
+                <td className="text-right tabular-nums">{enrolled === 0 ? '-' : `${fmtNumber(enrolled)} 명`}</td>
                 {METRIC_KEYS.map((k) => {
                   const v = (c.metrics as any)[k] ?? 0;
                   return (
                     <td key={k} className="text-right tabular-nums">
-                      {RATE_KEYS.has(k) ? fmtRate(v) : fmtNumber(v)}
+                      {RATE_KEYS.has(k) ? fmtRate(v) : fmtWithUnit(v, VIEW_UNIT[k] ?? '건')}
                     </td>
                   );
                 })}
